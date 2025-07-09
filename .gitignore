@@ -1,0 +1,9 @@
+# dist
+/target
+*.wasm
+
+# ide
+/.idea
+
+# rust
+Cargo.lock

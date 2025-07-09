@@ -1,0 +1,30 @@
+---
+###
+### Use `make artifacthub-pkg.yml` to auto-generate this file
+### See docs.kubewarden.io for publishing to ArtifactHub
+###
+version: 1.0.0
+name: disable-service-links-policy
+displayName: LIKE NAME, BUT FANCIER
+createdAt: '2025-07-10T00:08:10+02:00'
+description: DESCRIPTION OF YOUR POLICY
+license: Apache-2.0
+homeURL: https://author1.website
+containersImages:
+- name: policy
+  image: "ghcr.io/shilazi/policies/disable-service-links-policy:v1.0.0"
+keywords:
+- this is freeform
+links:
+- name: policy
+  url: https://github.com/shilazi/disable-service-links-policy/releases/download/v1.0.0/disable-service-links-policy-v1.0.0.wasm
+- name: source
+  url: POLICY HOMEPAGE URL
+provider:
+  name: kubewarden
+recommendations:
+- url: https://artifacthub.io/packages/helm/kubewarden/kubewarden-controller
+annotations:
+  kubewarden/resources: Pod # comma separated list
+  kubewarden/mutation: true
+  kubewarden/contextAware: false
