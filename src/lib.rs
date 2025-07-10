@@ -38,8 +38,8 @@ fn validate(payload: &[u8]) -> CallResult {
         warn!(LOG_DRAIN, "Policy validates Pods only. Accepting resource"; "kind" => &validation_request.request.kind.kind);
         return kubewarden::accept_request();
     }
-    // obj name
-    let obj_name = &validation_request.request.name;
+    // pod name
+    let pod_name = &validation_request.request.name;
     // namespace
     let namespace = &validation_request.request.namespace;
     // operation
@@ -47,7 +47,11 @@ fn validate(payload: &[u8]) -> CallResult {
     // kind
     let kind = &validation_request.request.kind.kind;
 
-    info!(LOG_DRAIN,  "{} {}", operation.to_lowercase(), kind, ; "name" => obj_name, "namespace" => namespace);
+    info!(LOG_DRAIN,  "{} {}", operation.to_lowercase(), kind, ; "name" => pod_name, "namespace" => namespace);
+    if validation_request.settings.exempt(namespace, pod_name) {
+        warn!(LOG_DRAIN, "accepting {} with exemption", pod_name);
+        return kubewarden::accept_request();
+    }
 
     match serde_json::from_value::<apicore::Pod>(validation_request.request.object) {
         Ok(mut pod) => {
@@ -58,7 +62,7 @@ fn validate(payload: &[u8]) -> CallResult {
 
             info!(
                 LOG_DRAIN,
-                "ending mutated {}/{}/{} enableServiceLinks with false", namespace, kind, obj_name,
+                "ending mutated {}/{}/{} enableServiceLinks with false", namespace, kind, pod_name,
             );
             kubewarden::mutate_request(mutated_object)
         }
@@ -71,9 +75,10 @@ fn validate(payload: &[u8]) -> CallResult {
 
 #[cfg(test)]
 mod tests {
-    use kubewarden_policy_sdk::test::Testcase;
-
     use super::*;
+    use std::collections::HashSet;
+
+    use kubewarden_policy_sdk::test::Testcase;
 
     #[test]
     fn mutate_pod_enable_service_links() -> Result<(), ()> {
@@ -101,6 +106,36 @@ mod tests {
         assert_eq!(
             final_pod.spec.as_mut().unwrap().enable_service_links,
             Some(false),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[allow(unused_variables)]
+    fn accept_pod_enable_service_links() -> Result<(), ()> {
+        let request_file = "test_data/pod_creation.json";
+
+        let exempt_namespaces = HashSet::from(["default".to_string()]);
+        let exempt_pod_name_prefixes = HashSet::from(["ng".to_string()]);
+
+        let tc = Testcase {
+            name: String::from("Pod creation"),
+            fixture_file: String::from(request_file),
+            expected_validation_result: true,
+            settings: Settings {
+                // exempt_namespaces: Some(exempt_namespaces),
+                // exempt_pod_name_prefixes: None,
+                exempt_namespaces: None,
+                exempt_pod_name_prefixes: Some(exempt_pod_name_prefixes),
+            },
+        };
+
+        let res = tc.eval(validate).unwrap();
+        assert!(
+            res.mutated_object.is_none(),
+            "Nothing mutated with test case: {}",
+            tc.name,
         );
 
         Ok(())

@@ -25,6 +25,13 @@ make
         resources: ["pods"]
         operations: ["CREATE", "UPDATE"]
       mutating: true
+      settings:
+        # exempt with Namespace
+        exempt_namespaces:
+        - kube-system
+        # exempt with Pod name prefix
+        exempt_pod_name_prefixes:
+        - foo
     ```
 3. Apply with kubectl
    ```bash 
