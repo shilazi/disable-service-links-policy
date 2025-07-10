@@ -34,37 +34,47 @@ fn validate(payload: &[u8]) -> CallResult {
         return kubewarden::accept_request();
     }
 
-    if validation_request.request.kind.kind != apicore::Pod::KIND {
-        warn!(LOG_DRAIN, "Policy validates Pods only. Accepting resource"; "kind" => &validation_request.request.kind.kind);
-        return kubewarden::accept_request();
-    }
-    // pod name
-    let pod_name = &validation_request.request.name;
-    // namespace
-    let namespace = &validation_request.request.namespace;
-    // operation
-    let operation = &validation_request.request.operation;
     // kind
     let kind = &validation_request.request.kind.kind;
+    // namespace
+    let namespace = &validation_request.request.namespace;
 
-    info!(LOG_DRAIN,  "{} {}", operation.to_lowercase(), kind, ; "name" => pod_name, "namespace" => namespace);
-    if validation_request.settings.exempt(namespace, pod_name) {
-        warn!(LOG_DRAIN, "accepting {} with exemption", pod_name);
+    if validation_request.request.kind.kind != apicore::Pod::KIND {
+        warn!(LOG_DRAIN, "Policy validates Pods only. Accepting resource"; "kind" => kind);
+        return kubewarden::accept_request();
+    }
+
+    if validation_request.settings.exempt_namespace(namespace) {
+        warn!(
+            LOG_DRAIN,
+            "accepting namespace {} with exemption", namespace
+        );
         return kubewarden::accept_request();
     }
 
     match serde_json::from_value::<apicore::Pod>(validation_request.request.object) {
         Ok(mut pod) => {
-            let pod_spec = pod.spec.as_mut().unwrap();
-            pod_spec.enable_service_links = Some(false);
+            let generate_name = pod.metadata.generate_name.clone();
+            let pod_name = pod.metadata.name.clone().or(generate_name).unwrap();
 
-            let mutated_object = serde_json::to_value(pod)?;
+            if validation_request.settings.exempt_pod_name(&pod_name) {
+                warn!(
+                    LOG_DRAIN,
+                    "accepting {}/{} with exemption", namespace, pod_name
+                );
+                return kubewarden::accept_request();
+            } else {
+                let pod_spec = pod.spec.as_mut().unwrap();
+                pod_spec.enable_service_links = Some(false);
 
-            info!(
-                LOG_DRAIN,
-                "ending mutated {}/{}/{} enableServiceLinks with false", namespace, kind, pod_name,
-            );
-            kubewarden::mutate_request(mutated_object)
+                let mutated_object = serde_json::to_value(pod)?;
+
+                info!(
+                    LOG_DRAIN,
+                    "ending mutated {}/{} enableServiceLinks with false", namespace, pod_name,
+                );
+                kubewarden::mutate_request(mutated_object)
+            }
         }
         Err(_) => {
             warn!(LOG_DRAIN, "cannot unmarshal resource: this policy does not know how to evaluate this resource; accept it");

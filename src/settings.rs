@@ -39,12 +39,17 @@ fn validate_kubernetes_object_name_regex(obj_name: &str) -> bool {
 
 impl Settings {
     // exempt return true，otherwise return false
-    pub(crate) fn exempt(&self, namespace: &String, pod_name: &String) -> bool {
+    pub(crate) fn exempt_namespace(&self, namespace: &String) -> bool {
         if let Some(namespaces) = &self.exempt_namespaces {
             if namespaces.contains(namespace) {
                 return true;
             }
         }
+        false
+    }
+
+    // exempt return true，otherwise return false
+    pub(crate) fn exempt_pod_name(&self, pod_name: &String) -> bool {
         if let Some(pod_name_prefixes) = &self.exempt_pod_name_prefixes {
             for pod_name_prefix in pod_name_prefixes.iter() {
                 if pod_name.starts_with(pod_name_prefix) {
@@ -70,8 +75,13 @@ impl kubewarden::settings::Validatable for Settings {
 
         if let Some(pod_name_prefixes) = &self.exempt_pod_name_prefixes {
             for pod_name_prefix in pod_name_prefixes.iter() {
-                if pod_name_prefix.len() > USIZE_253 || !validate_kubernetes_object_name_regex(pod_name_prefix) {
-                    return Err(format!("exempt_pod_name_prefix with invalid name: {}", pod_name_prefix));
+                if pod_name_prefix.len() > USIZE_253
+                    || !validate_kubernetes_object_name_regex(pod_name_prefix)
+                {
+                    return Err(format!(
+                        "exempt_pod_name_prefix with invalid name: {}",
+                        pod_name_prefix
+                    ));
                 }
             }
         }
